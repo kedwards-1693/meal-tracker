@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>My Meal Tracker</title>
+<style>
+  :root {
+    --orange: #E8601A; --orange-light: #FDE8D8; --orange-mid: #F4A06A;
+    --navy: #1A2E3B;
+    --green: #3B6D11; --green-bg: #EAF3DE;
+    --yellow: #854F0B; --yellow-bg: #FAEEDA;
+    --red: #A32D2D; --red-bg: #FCEBEB;
+    --bg: #F7F5F2; --card: #FFFFFF; --text: #1A1A1A;
+    --muted: #666666; --border: #E2DDD8;
+    --radius: 14px; --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
+
+  .header { background: var(--orange); padding: 16px 20px 12px; position: sticky; top: 0; z-index: 100; }
+  .header h1 { color: white; font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  .header p { color: rgba(255,255,255,0.8); font-size: 13px; margin-top: 2px; }
+
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); display: flex; z-index: 100; }
+  .nav-btn { flex: 1; padding: 10px 4px 12px; border: none; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 500; transition: color 0.15s; }
+  .nav-btn.active { color: var(--orange); }
+  .nav-btn svg { width: 22px; height: 22px; stroke-width: 1.8; }
+
+  .section { display: none; padding: 16px; }
+  .section.active { display: block; }
+
+  .card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+  .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .day-label { font-size: 20px; font-weight: 700; color: var(--navy); }
+  .day-date { font-size: 13px; color: var(--muted); }
+  .day-nav { display: flex; gap: 8px; }
+  .day-nav button { background: var(--orange-light); border: none; border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 500; color: var(--orange); cursor: pointer; }
+
+  /* Meal slot — vertical layout with reaction row beneath */
+  .meal-slot { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .meal-slot:last-child { border-bottom: none; padding-bottom: 0; }
+  .meal-slot-top { display: flex; align-items: flex-start; gap: 10px; }
+  .meal-time { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; min-width: 68px; padding-top: 3px; }
+  .meal-text { flex: 1; font-size: 15px; color: var(--text); line-height: 1.4; }
+  .meal-text.placeholder { color: #BBBBBB; font-style: italic; }
+  .edit-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+
+  /* Per-meal reaction strip */
+  .meal-reaction { display: flex; gap: 6px; margin-top: 8px; margin-left: 78px; }
+  .react-btn { border: 1.5px solid var(--border); background: white; border-radius: 20px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--muted); transition: all 0.12s; white-space: nowrap; }
+  .react-btn.sel-green { background: var(--green-bg); border-color: var(--green); color: var(--green); font-weight: 600; }
+  .react-btn.sel-yellow { background: var(--yellow-bg); border-color: var(--yellow); color: var(--yellow); font-weight: 600; }
+  .react-btn.sel-red { background: var(--red-bg); border-color: var(--red); color: var(--red); font-weight: 600; }
+
+  /* Coloured left border when a reaction is set */
+  .meal-slot.reacted-green { border-left: 3px solid var(--green); padding-left: 10px; }
+  .meal-slot.reacted-yellow { border-left: 3px solid var(--yellow); padding-left: 10px; }
+  .meal-slot.reacted-red { border-left: 3px solid var(--red); padding-left: 10px; }
+
+  textarea { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 15px; font-family: inherit; resize: none; outline: none; color: var(--text); background: white; }
+  textarea:focus { border-color: var(--orange); }
+
+  .save-btn { width: 100%; background: var(--orange); color: white; border: none; border-radius: var(--radius-sm); padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 12px; }
+  .save-btn:active { opacity: 0.85; }
+  .save-status { text-align: center; font-size: 13px; color: var(--green); margin-top: 8px; min-height: 20px; }
+
+  .food-section-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .food-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .food-chip { border-radius: 20px; padding: 5px 12px; font-size: 13px; border: 1px solid transparent; display: flex; align-items: center; gap: 4px; }
+  .food-chip.green { background: var(--green-bg); color: var(--green); border-color: #C0DD97; }
+  .food-chip.yellow { background: var(--yellow-bg); color: var(--yellow); border-color: #FAC775; }
+  .food-chip.red { background: var(--red-bg); color: var(--red); border-color: #F7C1C1; }
+  .food-chip .remove { cursor: pointer; opacity: 0.6; font-size: 15px; line-height: 1; margin-left: 2px; }
+
+  .add-food-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .add-food-row input { flex: 1; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 15px; font-family: inherit; outline: none; }
+  .add-food-row input:focus { border-color: var(--orange); }
+  .add-food-row select { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 8px; font-size: 14px; font-family: inherit; background: white; outline: none; }
+  .add-food-row button { background: var(--orange); color: white; border: none; border-radius: var(--radius-sm); padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+  /* Log */
+  .log-entry { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .log-entry:last-child { border-bottom: none; }
+  .log-date { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+  .log-meal-line { font-size: 13px; color: var(--text); margin-bottom: 4px; display: flex; align-items: baseline; gap: 6px; line-height: 1.5; }
+  .log-meal-name { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; min-width: 60px; }
+  .react-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; margin-top: 4px; }
+  .react-dot.green { background: var(--green); }
+  .react-dot.yellow { background: var(--yellow); }
+  .react-dot.red { background: var(--red); }
+  .log-note { font-size: 12px; color: var(--muted); margin-top: 4px; font-style: italic; }
+  .empty-log { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15px; }
+
+  .plan-day { margin-bottom: 2px; }
+  .plan-day-header { background: var(--orange-light); border-radius: var(--radius-sm); padding: 10px 14px; font-weight: 600; color: var(--orange); font-size: 15px; cursor: pointer; display: flex; justify-content: space-between; }
+  .plan-day-body { background: white; border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); padding: 12px 14px; display: none; }
+  .plan-day-body.open { display: block; }
+  .plan-row { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .plan-row:last-child { border-bottom: none; }
+  .plan-meal-label { color: var(--muted); font-weight: 500; min-width: 75px; }
+
+  .settings-label { font-size: 14px; font-weight: 600; color: var(--navy); margin-bottom: 6px; margin-top: 16px; }
+  .settings-input { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; background: white; }
+  .settings-input:focus { border-color: var(--orange); }
+  .settings-hint { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .settings-btn { background: var(--navy); color: white; border: none; border-radius: var(--radius-sm); padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 16px; }
+  .status-pill { display: inline-block; border-radius: 12px; padding: 3px 12px; font-size: 12px; font-weight: 600; margin-left: 8px; }
+  .status-pill.connected { background: var(--green-bg); color: var(--green); }
+  .status-pill.disconnected { background: var(--red-bg); color: var(--red); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; display: none; align-items: flex-end; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 20px 20px 0 0; padding: 20px; width: 100%; max-height: 88vh; overflow-y: auto; }
+  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; color: var(--navy); }
+  .modal-subtitle { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .modal-label { font-size: 14px; color: var(--muted); margin-bottom: 8px; margin-top: 16px; }
+  .modal textarea { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 15px; font-family: inherit; outline: none; }
+  .modal textarea:focus { border-color: var(--orange); }
+  .modal-react-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .modal-react-btn { border: 1.5px solid var(--border); background: white; border-radius: 20px; padding: 8px 16px; font-size: 14px; cursor: pointer; color: var(--text); flex: 1; text-align: center; }
+  .modal-react-btn.sel-green { background: var(--green-bg); border-color: var(--green); color: var(--green); font-weight: 600; }
+  .modal-react-btn.sel-yellow { background: var(--yellow-bg); border-color: var(--yellow); color: var(--yellow); font-weight: 600; }
+  .modal-react-btn.sel-red { background: var(--red-bg); border-color: var(--red); color: var(--red); font-weight: 600; }
+  .modal-btns { display: flex; gap: 8px; margin-top: 20px; }
+  .modal-btns button { flex: 1; padding: 13px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; border: none; }
+  .modal-cancel { background: var(--bg); color: var(--muted); }
+  .modal-save { background: var(--orange); color: white; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>My Meal Tracker</h1>
+  <p>GERD-friendly food journal</p>
+</div>
+
+<!-- TODAY TAB -->
+<div id="tab-today" class="section active">
+  <div class="day-header">
+    <div>
+      <div class="day-label" id="today-label">Today</div>
+      <div class="day-date" id="today-date"></div>
+    </div>
+    <div class="day-nav">
+      <button onclick="changeDay(-1)">← Prev</button>
+      <button onclick="changeDay(1)">Next →</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Meals & reactions</div>
+    <div id="meal-slots"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Notes</div>
+    <textarea id="notes-input" rows="3" placeholder="Anything to remember — timing, portion size, new foods tried..."></textarea>
+  </div>
+
+  <button class="save-btn" onclick="saveDay()">Save today's log</button>
+  <div class="save-status" id="save-status"></div>
+</div>
+
+<!-- PLAN TAB -->
+<div id="tab-plan" class="section">
+  <div id="plan-container"></div>
+</div>
+
+<!-- FOODS TAB -->
+<div id="tab-foods" class="section">
+  <div class="add-food-row">
+    <input type="text" id="food-input" placeholder="Add a food..." />
+    <select id="food-rating">
+      <option value="green">🟢</option>
+      <option value="yellow">🟡</option>
+      <option value="red">🔴</option>
+    </select>
+    <button onclick="addFood()">Add</button>
+  </div>
+  <div class="card">
+    <div class="food-section-title" style="color:var(--green)">🟢 Green — safe foods</div>
+    <div class="food-grid" id="green-foods"></div>
+  </div>
+  <div class="card">
+    <div class="food-section-title" style="color:var(--yellow)">🟡 Yellow — test carefully</div>
+    <div class="food-grid" id="yellow-foods"></div>
+  </div>
+  <div class="card">
+    <div class="food-section-title" style="color:var(--red)">🔴 Red — avoid</div>
+    <div class="food-grid" id="red-foods"></div>
+  </div>
+</div>
+
+<!-- LOG TAB -->
+<div id="tab-log" class="section">
+  <div class="card">
+    <div class="card-title">Past entries</div>
+    <div id="log-list"></div>
+  </div>
+</div>
+
+<!-- SETTINGS TAB -->
+<div id="tab-settings" class="section">
+  <div class="card">
+    <div style="display:flex; align-items:center; margin-bottom:4px;">
+      <span style="font-size:15px; font-weight:600; color:var(--navy)">Google Sheets sync</span>
+      <span class="status-pill disconnected" id="sync-status">Not connected</span>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">Connect your Google Sheet so your meal log saves automatically and is accessible from any device.</p>
+    <div class="settings-label">Your Google Apps Script URL</div>
+    <input class="settings-input" type="url" id="script-url" placeholder="https://script.google.com/macros/s/..." />
+    <div class="settings-hint">See the setup guide for how to get this URL. Takes about 5 minutes to set up once.</div>
+    <button class="settings-btn" onclick="saveSettings()">Save & test connection</button>
+    <div class="save-status" id="settings-status"></div>
+  </div>
+  <div class="card" style="margin-top:8px;">
+    <div style="font-size:14px; font-weight:600; color:var(--navy); margin-bottom:8px;">Export my data</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Download all your entries as a CSV file you can open in Excel or Google Sheets.</p>
+    <button onclick="exportCSV()" style="background:var(--orange-light); color:var(--orange); border:none; border-radius:var(--radius-sm); padding:11px; font-size:14px; font-weight:600; cursor:pointer; width:100%;">Download CSV</button>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="switchTab('today', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Today
+  </button>
+  <button class="nav-btn" onclick="switchTab('plan', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+    Meal Plan
+  </button>
+  <button class="nav-btn" onclick="switchTab('foods', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>
+    Foods
+  </button>
+  <button class="nav-btn" onclick="switchTab('log', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Log
+  </button>
+  <button class="nav-btn" onclick="switchTab('settings', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Settings
+  </button>
+</nav>
+
+<!-- Edit meal modal -->
+<div class="modal-overlay" id="meal-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Edit meal</div>
+    <div class="modal-subtitle" id="modal-subtitle">Log what you ate and how you felt after</div>
+    <div class="modal-label">What did you eat?</div>
+    <textarea id="modal-meal-input" rows="3" placeholder="e.g. 2 scrambled eggs, gluten-free toast"></textarea>
+    <div class="modal-label">How did you feel after?</div>
+    <div class="modal-react-row">
+      <button class="modal-react-btn" onclick="setModalReaction('green', this)">🟢 No symptoms</button>
+      <button class="modal-react-btn" onclick="setModalReaction('yellow', this)">🟡 Mild</button>
+      <button class="modal-react-btn" onclick="setModalReaction('red', this)">🔴 Rough</button>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-save" onclick="saveMeal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ───────────────────────────────────────────────────────────────────
+const MEALS = ['Breakfast','Lunch','Dinner','Snack','Evening'];
+const REACT_LABEL = { green: '🟢 No symptoms', yellow: '🟡 Mild', red: '🔴 Rough' };
+const WEEK_PLAN = [
+  { day:"Monday",    b:"2 scrambled eggs + GF toast",        l:"Turkey sandwich + cucumber",         d:"Chicken breast + baked potato + carrots",     s:"Cheese string, rice cakes" },
+  { day:"Tuesday",   b:"Egg sandwich on GF bread",           l:"Chicken & rice bowl + carrots",      d:"Ground turkey + rice + green beans",          s:"Turkey slices, GF crackers" },
+  { day:"Wednesday", b:"Scrambled eggs with cheese + toast", l:"Turkey roll-ups + rice cakes",       d:"Rotisserie chicken + sweet potato + zucchini",s:"Cheese string, pear (if tested)" },
+  { day:"Thursday",  b:"2 scrambled eggs + GF toast",        l:"Ground pork bowl + rice + green beans",d:"Chicken breast + potato + carrots",         s:"Rice cakes, turkey slices" },
+  { day:"Friday",    b:"Egg sandwich on GF bread",           l:"Rotisserie chicken + small potato",  d:"Ground turkey + rice + zucchini",             s:"Applesauce (if tested), GF crackers" },
+  { day:"Saturday",  b:"Eggs + GF toast",                   l:"Turkey sandwich + cucumber",         d:"Ground pork + rice + green beans",            s:"Cheese string, rice cakes" },
+  { day:"Sunday",    b:"Hard-boiled eggs + GF toast",        l:"Chicken & rice bowl + zucchini",     d:"Rotisserie chicken + baked potato + carrots", s:"Turkey slices, pear (if tested)" },
+];
+const DEFAULT_FOODS = {
+  green: ["Eggs","Chicken breast","Rotisserie chicken","Turkey breast","Ground turkey","Lean ground pork","Mild cheese","GF toast","White rice","Potatoes","Carrots","Green beans","Zucchini","Cucumber","Rice cakes","GF crackers"],
+  yellow: ["Applesauce","Pear","Sweet potato","Cottage cheese","Mozzarella","Fairlife milk","Couscous","Broccoli (small)","Bell peppers","Melon"],
+  red: ["Tuna","Greek yogurt","Cereal","Bananas","Onions","Garlic-heavy dishes","Tomato sauce","Pork chops","Sausage","Bacon","Citrus fruits","Large salads"]
+};
+
+let currentDate = new Date();
+let editingMeal = null;
+let modalReaction = null;
+
+let state = {
+  foods: JSON.parse(localStorage.getItem('mt_foods') || 'null') || JSON.parse(JSON.stringify(DEFAULT_FOODS)),
+  log:   JSON.parse(localStorage.getItem('mt_log')   || '{}'),
+  scriptUrl: localStorage.getItem('mt_script_url') || ''
+};
+
+function persist() {
+  localStorage.setItem('mt_foods', JSON.stringify(state.foods));
+  localStorage.setItem('mt_log',   JSON.stringify(state.log));
+  localStorage.setItem('mt_script_url', state.scriptUrl);
+}
+
+function dateKey(d) { return d.toISOString().split('T')[0]; }
+
+function getEntry() {
+  const k = dateKey(currentDate);
+  // meals now stores { text, reaction } per slot
+  if (!state.log[k]) state.log[k] = { meals: {}, notes: '' };
+  return state.log[k];
+}
+
+// ── TODAY ──────────────────────────────────────────────────────────────────
+function renderToday() {
+  const entry = getEntry();
+  const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const isToday = dateKey(currentDate) === dateKey(new Date());
+  document.getElementById('today-label').textContent = isToday ? 'Today' : days[currentDate.getDay()];
+  document.getElementById('today-date').textContent  = `${days[currentDate.getDay()]}, ${months[currentDate.getMonth()]} ${currentDate.getDate()}`;
+
+  document.getElementById('meal-slots').innerHTML = MEALS.map(m => {
+    const slot     = entry.meals[m] || {};
+    const hasText  = !!slot.text;
+    const reaction = slot.reaction || null;
+    const reacted  = reaction ? `reacted-${reaction}` : '';
+    return `<div class="meal-slot ${reacted}" id="slot-${m}">
+      <div class="meal-slot-top">
+        <div class="meal-time">${m}</div>
+        <div class="meal-text ${hasText ? '' : 'placeholder'}" id="meal-text-${m}">${hasText ? slot.text : 'Tap to add...'}</div>
+        <button class="edit-btn" onclick="openModal('${m}')">Edit</button>
+      </div>
+      ${hasText ? `
+      <div class="meal-reaction">
+        <button class="react-btn ${reaction==='green'  ? 'sel-green'  : ''}" onclick="setReaction('${m}','green',  this)">🟢 Fine</button>
+        <button class="react-btn ${reaction==='yellow' ? 'sel-yellow' : ''}" onclick="setReaction('${m}','yellow', this)">🟡 Mild</button>
+        <button class="react-btn ${reaction==='red'    ? 'sel-red'    : ''}" onclick="setReaction('${m}','red',    this)">🔴 Rough</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('notes-input').value = entry.notes || '';
+  document.getElementById('save-status').textContent = '';
+}
+
+function changeDay(dir) {
+  currentDate = new Date(currentDate);
+  currentDate.setDate(currentDate.getDate() + dir);
+  renderToday();
+}
+
+// Inline reaction buttons on the today card
+function setReaction(meal, rating, btn) {
+  const slot = getEntry().meals[meal];
+  if (!slot) return;
+  slot.reaction = slot.reaction === rating ? null : rating;
+  renderToday();
+}
+
+// ── MODAL ──────────────────────────────────────────────────────────────────
+function openModal(meal) {
+  editingMeal  = meal;
+  const slot   = getEntry().meals[meal] || {};
+  modalReaction = slot.reaction || null;
+
+  document.getElementById('modal-title').textContent    = `${meal}`;
+  document.getElementById('modal-subtitle').textContent = 'Log what you ate and how you felt after';
+  document.getElementById('modal-meal-input').value     = slot.text || '';
+  document.querySelectorAll('.modal-react-btn').forEach(b => b.className = 'modal-react-btn');
+  if (modalReaction) {
+    document.querySelectorAll('.modal-react-btn').forEach(b => {
+      if (b.textContent.toLowerCase().includes(modalReaction === 'green' ? 'no' : modalReaction === 'yellow' ? 'mild' : 'rough'))
+        b.classList.add('sel-' + modalReaction);
+    });
+  }
+  document.getElementById('meal-modal').classList.add('open');
+  setTimeout(() => document.getElementById('modal-meal-input').focus(), 100);
+}
+
+function setModalReaction(rating, btn) {
+  modalReaction = modalReaction === rating ? null : rating;
+  document.querySelectorAll('.modal-react-btn').forEach(b => b.className = 'modal-react-btn');
+  if (modalReaction) btn.classList.add('sel-' + modalReaction);
+}
+
+function closeModal() {
+  document.getElementById('meal-modal').classList.remove('open');
+  editingMeal = null; modalReaction = null;
+}
+
+function saveMeal() {
+  if (!editingMeal) return;
+  const text = document.getElementById('modal-meal-input').value.trim();
+  if (text) {
+    getEntry().meals[editingMeal] = { text, reaction: modalReaction };
+  } else {
+    delete getEntry().meals[editingMeal];
+  }
+  closeModal();
+  renderToday();
+}
+
+async function saveDay() {
+  const entry = getEntry();
+  entry.notes = document.getElementById('notes-input').value.trim();
+  persist();
+
+  const statusEl = document.getElementById('save-status');
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = 'Saving...';
+
+  if (state.scriptUrl) {
+    try {
+      const row = { date: dateKey(currentDate), notes: entry.notes };
+      MEALS.forEach(m => {
+        const slot = entry.meals[m] || {};
+        row[m.toLowerCase() + '_food']     = slot.text     || '';
+        row[m.toLowerCase() + '_reaction'] = slot.reaction || '';
+      });
+      await fetch(state.scriptUrl, { method: 'POST', body: JSON.stringify(row) });
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = '✓ Saved locally and to Google Sheets';
+    } catch {
+      statusEl.style.color = 'var(--yellow)';
+      statusEl.textContent = '✓ Saved locally (Sheets sync failed — check Settings)';
+    }
+  } else {
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = '✓ Saved on this device';
+  }
+  renderLog();
+}
+
+// ── MEAL PLAN ──────────────────────────────────────────────────────────────
+function renderPlan() {
+  document.getElementById('plan-container').innerHTML = WEEK_PLAN.map((d,i) => `
+    <div class="plan-day">
+      <div class="plan-day-header" onclick="togglePlanDay(${i})">
+        <span>${d.day}</span><span id="plan-arrow-${i}">▸</span>
+      </div>
+      <div class="plan-day-body" id="plan-body-${i}">
+        <div class="plan-row"><div class="plan-meal-label">Breakfast</div><div>${d.b}</div></div>
+        <div class="plan-row"><div class="plan-meal-label">Lunch</div><div>${d.l}</div></div>
+        <div class="plan-row"><div class="plan-meal-label">Dinner</div><div>${d.d}</div></div>
+        <div class="plan-row"><div class="plan-meal-label">Snacks</div><div>${d.s}</div></div>
+      </div>
+    </div>`).join('');
+  const todayIdx = (new Date().getDay() + 6) % 7;
+  togglePlanDay(todayIdx);
+}
+
+function togglePlanDay(i) {
+  const body  = document.getElementById('plan-body-'  + i);
+  const arrow = document.getElementById('plan-arrow-' + i);
+  const isOpen = body.classList.contains('open');
+  document.querySelectorAll('.plan-day-body').forEach(b  => b.classList.remove('open'));
+  document.querySelectorAll('[id^=plan-arrow-]').forEach(a => a.textContent = '▸');
+  if (!isOpen) { body.classList.add('open'); arrow.textContent = '▾'; }
+}
+
+// ── FOODS ──────────────────────────────────────────────────────────────────
+function renderFoods() {
+  ['green','yellow','red'].forEach(r => {
+    document.getElementById(r + '-foods').innerHTML = state.foods[r].map((f,i) =>
+      `<span class="food-chip ${r}">${f}<span class="remove" onclick="removeFood('${r}',${i})">×</span></span>`
+    ).join('') || '<span style="color:var(--muted);font-size:13px">None yet</span>';
+  });
+}
+
+function addFood() {
+  const name   = document.getElementById('food-input').value.trim();
+  const rating = document.getElementById('food-rating').value;
+  if (!name) return;
+  state.foods[rating].push(name);
+  document.getElementById('food-input').value = '';
+  persist(); renderFoods();
+}
+
+function removeFood(r, i) { state.foods[r].splice(i, 1); persist(); renderFoods(); }
+
+document.getElementById('food-input').addEventListener('keydown', e => { if (e.key === 'Enter') addFood(); });
+
+// ── LOG ────────────────────────────────────────────────────────────────────
+function renderLog() {
+  const el   = document.getElementById('log-list');
+  const keys = Object.keys(state.log).sort().reverse().slice(0, 30);
+  if (!keys.length) { el.innerHTML = '<div class="empty-log">No entries yet.<br>Start logging today!</div>'; return; }
+
+  el.innerHTML = keys.map(k => {
+    const e     = state.log[k];
+    const lines = MEALS.map(m => {
+      const slot = e.meals[m];
+      if (!slot || !slot.text) return '';
+      const dot  = slot.reaction ? `<span class="react-dot ${slot.reaction}"></span>` : '';
+      return `<div class="log-meal-line">
+        <span class="log-meal-name">${m}</span>${dot}
+        <span>${slot.text}</span>
+      </div>`;
+    }).filter(Boolean).join('');
+
+    return `<div class="log-entry">
+      <div class="log-date">${k}</div>
+      ${lines || '<div style="font-size:13px;color:var(--muted)"><em>No meals logged</em></div>'}
+      ${e.notes ? `<div class="log-note">${e.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── SETTINGS ───────────────────────────────────────────────────────────────
+function renderSettings() {
+  document.getElementById('script-url').value = state.scriptUrl;
+  const pill = document.getElementById('sync-status');
+  if (state.scriptUrl) { pill.textContent = 'Connected'; pill.className = 'status-pill connected'; }
+  else { pill.textContent = 'Not connected'; pill.className = 'status-pill disconnected'; }
+}
+
+async function saveSettings() {
+  const url      = document.getElementById('script-url').value.trim();
+  const statusEl = document.getElementById('settings-status');
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = 'Testing connection...';
+  try {
+    await fetch(url, { method: 'POST', body: JSON.stringify({ test: true }) });
+    state.scriptUrl = url; persist();
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = '✓ Connected! Your logs will now sync to Google Sheets.';
+    renderSettings();
+  } catch {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '✗ Could not connect. Double-check your URL in the setup guide.';
+  }
+}
+
+function exportCSV() {
+  const headers = ['Date', ...MEALS.flatMap(m => [`${m} Food`, `${m} Reaction`]), 'Notes'];
+  const rows = [headers];
+  Object.keys(state.log).sort().forEach(k => {
+    const e = state.log[k];
+    rows.push([k, ...MEALS.flatMap(m => {
+      const slot = e.meals[m] || {};
+      return [slot.text || '', slot.reaction || ''];
+    }), e.notes || '']);
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'meal-log.csv';
+  a.click();
+}
+
+// ── NAV ────────────────────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b  => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'settings') renderSettings();
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+renderToday();
+renderPlan();
+renderFoods();
+renderLog();
+</script>
+</body>
+</html>
