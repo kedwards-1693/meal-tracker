@@ -291,16 +291,41 @@ let currentDate = new Date();
 let editingMeal = null;
 let modalReaction = null;
 
+// ── STORAGE: single blob approach for iOS Safari standalone reliability ──
+const STORAGE_KEY = 'mt_appdata_v2';
+
+function loadState() {
+  // Try all storage locations in order of reliability
+  const sources = [
+    () => localStorage.getItem(STORAGE_KEY),
+    () => sessionStorage.getItem(STORAGE_KEY),
+    () => localStorage.getItem('mt_script_url') // legacy fallback
+  ];
+  for (const src of sources) {
+    try {
+      const raw = src();
+      if (raw && raw.startsWith('{')) {
+        const parsed = JSON.parse(raw);
+        if (parsed.version === 2) return parsed;
+      }
+    } catch(e) {}
+  }
+  return null;
+}
+
+const saved = loadState();
 let state = {
-  foods: JSON.parse(localStorage.getItem('mt_foods') || 'null') || JSON.parse(JSON.stringify(DEFAULT_FOODS)),
-  log:   JSON.parse(localStorage.getItem('mt_log')   || '{}'),
-  scriptUrl: localStorage.getItem('mt_script_url') || ''
+  version: 2,
+  foods: (saved && saved.foods) || JSON.parse(JSON.stringify(DEFAULT_FOODS)),
+  log:   (saved && saved.log)   || {},
+  scriptUrl: (saved && saved.scriptUrl) || ''
 };
 
 function persist() {
-  localStorage.setItem('mt_foods', JSON.stringify(state.foods));
-  localStorage.setItem('mt_log',   JSON.stringify(state.log));
-  localStorage.setItem('mt_script_url', state.scriptUrl);
+  const blob = JSON.stringify(state);
+  // Write to both storages — iOS standalone mode sometimes only reads one
+  try { localStorage.setItem(STORAGE_KEY, blob); } catch(e) {}
+  try { sessionStorage.setItem(STORAGE_KEY, blob); } catch(e) {}
 }
 
 function dateKey(d) { return d.toISOString().split('T')[0]; }
@@ -412,20 +437,18 @@ async function saveDay() {
   statusEl.textContent = 'Saving...';
 
   if (state.scriptUrl) {
-    try {
-      const row = { date: dateKey(currentDate), notes: entry.notes };
-      MEALS.forEach(m => {
-        const slot = entry.meals[m] || {};
-        row[m.toLowerCase() + '_food']     = slot.text     || '';
-        row[m.toLowerCase() + '_reaction'] = slot.reaction || '';
-      });
-      await fetch(state.scriptUrl, { method: 'POST', body: JSON.stringify(row) });
-      statusEl.style.color = 'var(--green)';
-      statusEl.textContent = '✓ Saved locally and to Google Sheets';
-    } catch {
-      statusEl.style.color = 'var(--yellow)';
-      statusEl.textContent = '✓ Saved locally (Sheets sync failed — check Settings)';
-    }
+    const row = { date: dateKey(currentDate), notes: entry.notes };
+    MEALS.forEach(m => {
+      const slot = entry.meals[m] || {};
+      row[m.toLowerCase() + '_food']     = slot.text     || '';
+      row[m.toLowerCase() + '_reaction'] = slot.reaction || '';
+    });
+    const synced = await syncToSheets(row);
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = synced
+      ? '✓ Saved locally and to Google Sheets'
+      : '✓ Saved locally (Sheets sync failed — check Settings)';
+    if (!synced) statusEl.style.color = 'var(--yellow)';
   } else {
     statusEl.style.color = 'var(--green)';
     statusEl.textContent = '✓ Saved on this device';
@@ -510,7 +533,9 @@ function renderLog() {
 
 // ── SETTINGS ───────────────────────────────────────────────────────────────
 function renderSettings() {
-  document.getElementById('script-url').value = state.scriptUrl;
+  const urlField = document.getElementById('script-url');
+  // Always show saved URL so user can see it's persisted
+  urlField.value = state.scriptUrl || '';
   const pill = document.getElementById('sync-status');
   if (state.scriptUrl) { pill.textContent = 'Connected'; pill.className = 'status-pill connected'; }
   else { pill.textContent = 'Not connected'; pill.className = 'status-pill disconnected'; }
@@ -519,17 +544,55 @@ function renderSettings() {
 async function saveSettings() {
   const url      = document.getElementById('script-url').value.trim();
   const statusEl = document.getElementById('settings-status');
+
+  if (!url) {
+    state.scriptUrl = ''; persist(); renderSettings();
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'URL cleared.';
+    return;
+  }
+
+  if (!url.includes('script.google.com/macros/s/') || !url.endsWith('/exec')) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '✗ URL looks wrong — it should contain /macros/s/ and end with /exec';
+    return;
+  }
+
   statusEl.style.color = 'var(--muted)';
   statusEl.textContent = 'Testing connection...';
+
   try {
-    await fetch(url, { method: 'POST', body: JSON.stringify({ test: true }) });
-    state.scriptUrl = url; persist();
+    // Use no-cors mode so iOS doesn't block the request; we just need it to reach Google
+    const response = await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ test: true })
+    });
+    // no-cors always returns opaque response (status 0) — if we got here without throwing, it reached Google
+    state.scriptUrl = url;
+    persist();
     statusEl.style.color = 'var(--green)';
-    statusEl.textContent = '✓ Connected! Your logs will now sync to Google Sheets.';
+    statusEl.textContent = '✓ Saved! URL looks valid and reached Google. Your logs will now sync.';
     renderSettings();
-  } catch {
+  } catch(err) {
     statusEl.style.color = 'var(--red)';
-    statusEl.textContent = '✗ Could not connect. Double-check your URL in the setup guide.';
+    statusEl.textContent = '✗ Could not reach Google — check your internet connection and URL.';
+  }
+}
+
+async function syncToSheets(row) {
+  if (!state.scriptUrl) return false;
+  try {
+    await fetch(state.scriptUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(row)
+    });
+    return true;
+  } catch(e) {
+    return false;
   }
 }
 
