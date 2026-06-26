@@ -291,7 +291,7 @@ const DEFAULT_FOODS = {
 // ── STATE ──────────────────────────────────────────────────────────────────
 // scriptUrl is the ONLY thing we persist in localStorage — it's small and critical
 // Everything else (log, foods) comes from / goes to Google Sheets
-const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbwAqjwKrAaaNVXN4qWnhbUb08SGsjgLG86yoGOyfRnVCHJnO1kpmVILS7iobPAF9Y_lhA/exec';
+const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbx8jOMavYJVPmaqJeVHTPVfS7lnuSZISMKxt_MK_oSMzN1kg3GI0QCPY5dOj30qEdWIkw/exec';
 let scriptUrl = HARDCODED_URL;
 try { localStorage.setItem('mt_script_url', scriptUrl); } catch(e) {}
 let log   = {};   // { "2026-06-25": { meals: { Breakfast: {text,reaction}, ... }, notes: "" } }
