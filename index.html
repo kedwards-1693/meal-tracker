@@ -217,11 +217,11 @@
       <span style="font-size:15px;font-weight:600;color:var(--navy)">Google Sheets sync</span>
       <span class="status-pill disconnected" id="conn-status-pill">Not connected</span>
     </div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:4px;">Your data is stored in Google Sheets. The app loads from Sheets on startup so it always reflects your latest entries from any device.</p>
-    <div class="settings-label">Google Apps Script URL</div>
-    <input class="settings-input" type="url" id="script-url" placeholder="https://script.google.com/macros/s/...exec" />
-    <div class="settings-hint">Must contain /macros/s/ and end with /exec. See setup guide if unsure.</div>
-    <button class="settings-btn" onclick="saveSettings()">Save & connect</button>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Your data lives in Google Sheets and loads fresh every time you open the app. No setup needed on any device.</p>
+    <div class="settings-label">Connected script URL</div>
+    <div style="font-size:12px;word-break:break-all;background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;color:var(--muted);border:1px solid var(--border)" id="script-url-display"></div>
+    <div class="settings-hint" style="margin-top:6px;">This is hardcoded in the app. If you ever redeploy your Apps Script, update this in the index.html file and re-upload to GitHub.</div>
+    <button class="settings-btn" onclick="retryConnection()" style="margin-top:12px;">Retry connection</button>
     <div class="save-status" id="settings-status"></div>
   </div>
   <div class="card" style="margin-top:8px;">
@@ -291,7 +291,9 @@ const DEFAULT_FOODS = {
 // ── STATE ──────────────────────────────────────────────────────────────────
 // scriptUrl is the ONLY thing we persist in localStorage — it's small and critical
 // Everything else (log, foods) comes from / goes to Google Sheets
-let scriptUrl = localStorage.getItem('mt_script_url') || '';
+const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbwAqjwKrAaaNVXN4qWnhbUb08SGsjgLG86yoGOyfRnVCHJnO1kpmVILS7iobPAF9Y_lhA/exec';
+let scriptUrl = HARDCODED_URL;
+try { localStorage.setItem('mt_script_url', scriptUrl); } catch(e) {}
 let log   = {};   // { "2026-06-25": { meals: { Breakfast: {text,reaction}, ... }, notes: "" } }
 let foods = JSON.parse(JSON.stringify(DEFAULT_FOODS));
 let currentDate = new Date();
@@ -588,44 +590,27 @@ function renderLog() {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────
 function renderSettings() {
-  document.getElementById('script-url').value = scriptUrl;
+  const display = document.getElementById('script-url-display');
+  if (display) display.textContent = scriptUrl;
   const pill = document.getElementById('conn-status-pill');
   if (scriptUrl) { pill.textContent='Connected'; pill.className='status-pill connected'; }
   else           { pill.textContent='Not connected'; pill.className='status-pill disconnected'; }
 }
 
-async function saveSettings() {
-  const url      = document.getElementById('script-url').value.trim();
+async function retryConnection() {
   const statusEl = document.getElementById('settings-status');
-
-  if (!url) {
-    scriptUrl = ''; localStorage.removeItem('mt_script_url');
-    renderSettings(); statusEl.style.color='var(--muted)'; statusEl.textContent='URL cleared.';
-    return;
-  }
-  if (!url.includes('script.google.com/macros/s/') || !url.endsWith('/exec')) {
-    statusEl.style.color='var(--red)';
-    statusEl.textContent='✗ URL should contain /macros/s/ and end with /exec';
-    return;
-  }
-
-  statusEl.style.color='var(--muted)'; statusEl.textContent='Connecting...';
-  // Save the URL first so loadFromSheets can use it
-  scriptUrl = url;
-  localStorage.setItem('mt_script_url', url);
-
+  statusEl.style.color='var(--muted)'; statusEl.textContent='Retrying...';
   try {
-    // Test connection by trying a real load
     const data = await sheetsGet('load');
     if (data && data.log)   log   = data.log;
     if (data && data.foods) foods = data.foods;
     statusEl.style.color='var(--green)';
-    statusEl.textContent='✓ Connected and data loaded!';
-    renderSettings(); renderToday(); renderFoods(); renderLog();
-    setSyncStatus('ok','Connected to Google Sheets');
+    statusEl.textContent='✓ Reconnected and data loaded!';
+    renderToday(); renderFoods(); renderLog();
+    setSyncStatus('ok','Synced with Google Sheets');
   } catch(e) {
     statusEl.style.color='var(--red)';
-    statusEl.textContent='✗ Could not connect — make sure you deployed a new version of the Apps Script';
+    statusEl.textContent='✗ Still cannot connect — check your internet connection';
   }
 }
 
